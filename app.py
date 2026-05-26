@@ -24,7 +24,7 @@ st.title("🧿 ŞAHANE V650: Otopilot Tarama & Backtest Merkezi")
 st.markdown("---")
 
 # ==========================================
-# 🌍 2. SEKTÖR VE TEMA KÜTÜPHANESİ (YENİ)
+# 🌍 2. SEKTÖR VE TEMA KÜTÜPHANESİ
 # ==========================================
 ETF_UNIVERSE = {
     "XLI": "Ana Sektör: Sanayi", "XLK": "Ana Sektör: Teknoloji", "XLE": "Ana Sektör: Enerji",
@@ -46,7 +46,7 @@ ETF_UNIVERSE = {
 }
 
 # ==========================================
-# 🧠 3. ÇEKİRDEK FONKSİYONLAR
+# 🧠 3. ÇEKİRDEK FONKSİYONLAR & MATEMATİK
 # ==========================================
 @st.cache_data(ttl=3600)
 def fetch_data(ticker, start_date, end_date):
@@ -58,39 +58,29 @@ def fetch_data(ticker, start_date, end_date):
 
 @st.cache_data(ttl=86400)
 def get_market_tickers(market_type):
-    """Otomatik hisse ve sektör listelerini çeker"""
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
-    if market_type == "🔥 Ana Sektör ETF'leri":
-        return [k for k, v in ETF_UNIVERSE.items() if "Ana Sektör" in v]
-        
-    elif market_type == "🌪️ Tematik Alt Sektör ETF'leri":
-        return [k for k, v in ETF_UNIVERSE.items() if "Alt Sektör" in v]
-        
+    if market_type == "🔥 Ana Sektör ETF'leri": return [k for k, v in ETF_UNIVERSE.items() if "Ana Sektör" in v]
+    elif market_type == "🌪️ Tematik Alt Sektör ETF'leri": return [k for k, v in ETF_UNIVERSE.items() if "Alt Sektör" in v]
     elif market_type == "🇺🇸 S&P 500":
-        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        html = requests.get(url, headers=headers).text
-        tables = pd.read_html(html)
-        for df in tables:
-            if 'Symbol' in df.columns:
-                return df['Symbol'].str.replace('.', '-', regex=False).tolist()
-        return []
-        
+        try:
+            url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+            html = requests.get(url, headers=headers).text
+            for df in pd.read_html(html):
+                if 'Symbol' in df.columns: return df['Symbol'].str.replace('.', '-', regex=False).tolist()
+        except: return []
     elif market_type == "🌐 NASDAQ 100":
-        url = 'https://en.wikipedia.org/wiki/Nasdaq-100'
-        html = requests.get(url, headers=headers).text
-        tables = pd.read_html(html)
-        for df in tables:
-            if 'Ticker' in df.columns:
-                return df['Ticker'].tolist()
-        return []
-        
+        try:
+            url = 'https://en.wikipedia.org/wiki/Nasdaq-100'
+            html = requests.get(url, headers=headers).text
+            for df in pd.read_html(html):
+                if 'Ticker' in df.columns: return df['Ticker'].tolist()
+        except: return []
     elif market_type == "🚀 Space & AI Explosive (Manuel)":
         return ["ASTS", "RKLB", "SPIR", "SIDU", "AMPG", "LUNR", "SMCI", "NVDA", "PLTR", "SOFI", "IREN"]
-        
     return ["QQQ", "SPY"]
 
-def apply_sahane_logic(df, qqq_df, vwm_len=14, ema_fast=5):
+def apply_sahane_logic(df, vwm_len=14):
+    # 1. STANDART EFOR VE SQUEEZE
     df['Vol_Avg'] = ta.sma(df['Volume'], length=65)
     df['RVOL'] = df['Volume'] / df['Vol_Avg']
     
@@ -110,60 +100,72 @@ def apply_sahane_logic(df, qqq_df, vwm_len=14, ema_fast=5):
     df['Effort_Line'] = ta.wma(ta.wma(df['C_V'], length=vwm_len) / ta.wma(df['Volume'], length=vwm_len), length=3)
     df['Effort_Cross_Up'] = (df['Close'] > df['Effort_Line']) & (df['Close'].shift(1) <= df['Effort_Line'].shift(1))
     
-    df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+    # 2. TRADINGVIEW BİREBİR ATR HESABI (RMA Smoothing)
+    df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14, mamode='rma')
+    
+    # 3. TRADINGVIEW BİREBİR WHALE POWER HESABI (Pine Script Mantığı Vektörel)
+    df['c_range'] = np.maximum(df['High'] - df['Low'], 0.001)
+    df['upper_wick'] = df['High'] - np.maximum(df['Open'], df['Close'])
+    df['lower_wick'] = np.minimum(df['Open'], df['Close']) - df['Low']
+    df['wick_delta'] = np.where(df['c_range'] > 0, (df['lower_wick'] - df['upper_wick']) / df['c_range'], 0)
+    
+    df['delta'] = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / df['c_range']
+    vol_sma20 = ta.sma(df['Volume'], length=20).fillna(1)
+    df['delta_vol'] = ta.sma(df['delta'] * df['Volume'], length=20) / np.maximum(vol_sma20, 0.001)
+    
+    rvol_raw = df['Volume'] / np.maximum(vol_sma20, 1)
+    df['rvol_wbot'] = np.where(rvol_raw > 2.5, 2.5 + np.log(np.maximum(rvol_raw - 1.5, 0.001)), rvol_raw)
+    df['rsi_14'] = ta.rsi(df['Close'], length=14)
+    
+    # Logaritmik/Üstel Matematik
+    inner_calc = ((df['rsi_14'] - 50) + (df['delta_vol'] * 40) + (df['wick_delta'] * 20)) * df['rvol_wbot'] * 1.5 / 5
+    inner_calc = np.clip(inner_calc, -50, 50) # Patlamayı önlemek için limit
+    df['logic_pwr'] = np.log(1 + np.exp(inner_calc)) * 5
+    
+    w_pwr_raw = np.power(np.log10(np.maximum(1 + df['logic_pwr'], 1.001)) * 65, 0.8) * 1.8
+    df['w_pwr_wbot'] = ta.wma(pd.Series(np.minimum(w_pwr_raw, 100)), length=2)
+    
     return df
 
-def run_historical_backtest(df):
+def run_historical_backtest(df, tv_calibration=1.0):
     signals = df[df['Effort_Cross_Up']]
     results = []
     
     for entry_idx in signals.index:
         entry_price = df.loc[entry_idx, 'Close']
         atr = df.loc[entry_idx, 'ATR']
-        rvol = df.loc[entry_idx, 'RVOL']
+        w_pwr = df.loc[entry_idx, 'w_pwr_wbot']
         
-        if pd.isna(atr): continue
+        if pd.isna(atr) or pd.isna(w_pwr): continue
             
         # ==========================================
-        # 🔮 QUANTUM PROJECTION ENGINE (PINE SCRIPT BİREBİR)
+        # 🔮 QUANTUM PROJECTION ENGINE (TV UYARLAMASI)
         # ==========================================
         base_expansion = atr * 1.5
+        pwr_factor = max(1.0, min((w_pwr / 50.0), 2.0))
         
-        # pwr_factor: Balina gücünü Hacim Şoku (RVOL) ile simüle ediyoruz (Min 1.0, Max 2.0)
-        pwr_factor = max(1.0, min((rvol / 1.5), 2.0))
-        
-        # TV Kodundaki score_boost ve mtf_boost (Python'da günlük tarama yaptığımız için ortalama %10 sapma katsayısı ekledik)
-        score_boost = 1.10
-        mtf_boost = 1.0
-        
-        target_dist = base_expansion * pwr_factor * 1.0 * score_boost * mtf_boost
-        target_dist = min(target_dist, atr * 4.0) # Pine Script'teki maksimum hedef sınırı
+        # TV'deki Elliot ve MTF skorlarının ortalama birleşimi olarak kalibrasyon kullanıyoruz
+        target_dist = base_expansion * pwr_factor * tv_calibration
+        target_dist = min(target_dist, atr * 4.0) # Maksimum tavan sınırı
         
         target_1 = entry_price + target_dist
-        target_2 = entry_price + (target_dist * 1.618) # Fibonacci çarpanı
+        target_2 = entry_price + (target_dist * 1.618)
         stop_loss = entry_price - (atr * 1.5)
         
-        # ==========================================
-        
         future_df = df.loc[entry_idx:].iloc[1:30]
-        
         t1_hit, t2_hit = False, False
         days_to_t1, days_to_t2 = "-", "-"
         max_price_reached = entry_price
         
         for i in range(len(future_df)):
             current_bar = future_df.iloc[i]
-            
             if current_bar['High'] > max_price_reached:
                 max_price_reached = current_bar['High']
-            
             if current_bar['Low'] <= stop_loss:
                 break
-                
             if not t1_hit and current_bar['High'] >= target_1:
                 t1_hit = True
                 days_to_t1 = i + 1
-                
             if not t2_hit and current_bar['High'] >= target_2:
                 t2_hit = True
                 days_to_t2 = i + 1
@@ -171,7 +173,7 @@ def run_historical_backtest(df):
                 
         results.append({
             "Tarih": entry_idx.date(),
-            "Giriş Fiyatı": round(entry_price, 2),
+            "Giriş (Close)": round(entry_price, 2),
             "Target 1": round(target_1, 2),
             "T1 Vuruldu mu?": "✅" if t1_hit else "❌",
             "T1 Süre (Gün)": days_to_t1,
@@ -212,7 +214,6 @@ with tab1:
         end_date = datetime.today()
         start_date = end_date - timedelta(days=150)
         
-        # S&P 500 gibi büyük listeleri limitle (Sunucu güvencesi)
         if len(tickers) > 105: tickers = tickers[:105] 
             
         for i, ticker in enumerate(tickers):
@@ -221,14 +222,12 @@ with tab1:
                 df = fetch_data(ticker, start_date, end_date)
                 if df.empty or len(df) < 50: continue
                 
-                df['Vol_Avg'] = ta.sma(df['Volume'], length=65)
-                df['RVOL'] = df['Volume'] / df['Vol_Avg']
-                
+                df = apply_sahane_logic(df)
                 latest = df.iloc[-1]
+                
                 if latest['RVOL'] >= rvol_filter:
                     isim = ETF_UNIVERSE.get(ticker, "Hisse")
                     gosterim_ismi = f"{ticker} ({isim})" if isim != "Hisse" else ticker
-                    
                     explosive_list.append({
                         "Sembol / Tema": gosterim_ismi,
                         "Kapanış": round(latest['Close'], 2),
@@ -248,15 +247,21 @@ with tab2:
     st.subheader("Forward-Looking Matrix (Efor Çizgisi Hedef Simülasyonu)")
     st.markdown("Geçmişteki 'Efor Kırılımı' sinyallerinin Tahmin 1 ve Tahmin 2'ye kaç günde ulaştığını analiz eder.")
     
-    b_ticker = st.text_input("Backtest Yapılacak Hisse (Örn: ASTS):", value="ASTS").upper()
-    b_days = st.slider("Kaç Günlük Geçmişi Tara?", 100, 1000, 365, step=50)
+    col_b1, col_b2, col_b3 = st.columns(3)
+    with col_b1:
+        b_ticker = st.text_input("Backtest Yapılacak Hisse (Örn: INTU):", value="INTU").upper()
+    with col_b2:
+        b_days = st.slider("Kaç Günlük Geçmişi Tara?", 100, 1000, 365, step=50)
+    with col_b3:
+        # MTF ve Score Boost farkını kapatmak için kalibrasyon ayarı
+        tv_calib = st.number_input("TV Kalibrasyon Çarpanı", min_value=0.5, max_value=3.0, value=1.15, step=0.05, help="TradingView'daki hedeflerle Python hedefleri arasında ufak farklar varsa, burayı kaydırarak eşitleyebilirsin.")
     
     if st.button("⏱️ Backtesti Başlat"):
         with st.spinner("Geçmiş sinyaller simüle ediliyor..."):
             df_b = fetch_data(b_ticker, datetime.today() - timedelta(days=b_days), datetime.today())
             if not df_b.empty:
-                df_b = apply_sahane_logic(df_b, df_b)
-                bt_results = run_historical_backtest(df_b)
+                df_b = apply_sahane_logic(df_b)
+                bt_results = run_historical_backtest(df_b, tv_calibration=tv_calib)
                 
                 if not bt_results.empty:
                     st.success(f"{b_ticker} için {len(bt_results)} adet kırılım (Yeşil Üçgen) sinyali bulundu ve simüle edildi.")
@@ -272,11 +277,9 @@ with tab3:
     if st.button("⚛️ Fusion Analizi Yap"):
         df_q = fetch_data(q_ticker, datetime.today() - timedelta(days=90), datetime.today())
         if not df_q.empty:
-            df_q['vol_avg'] = df_q['Volume'].rolling(20).mean()
-            df_q['is_whale_vol'] = df_q['Volume'] > (df_q['vol_avg'] + df_q['Volume'].rolling(20).std() * 1.5)
-            df_q['whale_pwr'] = (df_q['Volume'] / df_q['vol_avg']) * ((df_q['Close'] - df_q['Low']) / (df_q['High'] - df_q['Low'] + 1e-6))
+            df_q = apply_sahane_logic(df_q)
             df_q['slope'] = (df_q['Close'] - df_q['Close'].shift(3)) / 3
-            df_q['is_bull_trap'] = (df_q['slope'] > 0) & (df_q['whale_pwr'] < df_q['whale_pwr'].shift(1))
+            df_q['is_bull_trap'] = (df_q['slope'] > 0) & (df_q['w_pwr_wbot'] < df_q['w_pwr_wbot'].shift(1))
             
-            df_q['Sinyal'] = np.where(df_q['is_bull_trap'], "⛔ TRAP", np.where(df_q['whale_pwr'] > 0.7, "🐋 WHALE IN", "⚪ WAIT"))
-            st.dataframe(df_q[['Close', 'whale_pwr', 'Sinyal']].tail(10).sort_index(ascending=False), use_container_width=True)
+            df_q['Sinyal'] = np.where(df_q['is_bull_trap'], "⛔ TRAP", np.where(df_q['w_pwr_wbot'] > 70.0, "🐋 WHALE IN", "⚪ WAIT"))
+            st.dataframe(df_q[['Close', 'w_pwr_wbot', 'Sinyal']].tail(10).sort_index(ascending=False), use_container_width=True)
