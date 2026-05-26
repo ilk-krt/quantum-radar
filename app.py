@@ -5,6 +5,7 @@ import pandas_ta as ta
 import numpy as np
 from datetime import datetime, timedelta
 import time
+import requests # BÖLÜM 1: Bunu en üste ekledik
 
 # ==========================================
 # 🎛️ 1. STREAMLIT ARAYÜZ VE SAYFA AYARLARI
@@ -33,18 +34,14 @@ def fetch_data(ticker, start_date, end_date):
     df.dropna(inplace=True)
     return df
 
-@st.cache_data(ttl=86400)
-def get_market_tickers(market_type):
-    """Otomatik hisse listelerini çeker"""
-    if market_type == "S&P 500":
-        table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
-        return table[0]['Symbol'].tolist()
-    elif market_type == "NASDAQ 100":
-        table = pd.read_html('https://en.wikipedia.org/wiki/Nasdaq-100')
-        return table[4]['Ticker'].tolist()
-    elif market_type == "Space & AI Explosive (Manuel)":
-        return ["ASTS", "RKLB", "SPIR", "SIDU", "AMPG", "LUNR", "SMCI", "NVDA", "PLTR", "SOFI", "IREN"]
-    return ["QQQ", "SPY"]
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import pandas_ta as ta
+import numpy as np
+from datetime import datetime, timedelta
+import time
+import requests # BÖLÜM 1: Bunu en üste ekledik
 
 def apply_sahane_logic(df, qqq_df, vwm_len=14, ema_fast=5):
     # RVOL ve Squeeze
