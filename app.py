@@ -120,11 +120,30 @@ def run_historical_backtest(df):
     for entry_idx in signals.index:
         entry_price = df.loc[entry_idx, 'Close']
         atr = df.loc[entry_idx, 'ATR']
+        rvol = df.loc[entry_idx, 'RVOL']
+        
         if pd.isna(atr): continue
             
-        target_1 = entry_price + (atr * 2)
-        target_2 = entry_price + (atr * 4)
+        # ==========================================
+        # 🔮 QUANTUM PROJECTION ENGINE (PINE SCRIPT BİREBİR)
+        # ==========================================
+        base_expansion = atr * 1.5
+        
+        # pwr_factor: Balina gücünü Hacim Şoku (RVOL) ile simüle ediyoruz (Min 1.0, Max 2.0)
+        pwr_factor = max(1.0, min((rvol / 1.5), 2.0))
+        
+        # TV Kodundaki score_boost ve mtf_boost (Python'da günlük tarama yaptığımız için ortalama %10 sapma katsayısı ekledik)
+        score_boost = 1.10
+        mtf_boost = 1.0
+        
+        target_dist = base_expansion * pwr_factor * 1.0 * score_boost * mtf_boost
+        target_dist = min(target_dist, atr * 4.0) # Pine Script'teki maksimum hedef sınırı
+        
+        target_1 = entry_price + target_dist
+        target_2 = entry_price + (target_dist * 1.618) # Fibonacci çarpanı
         stop_loss = entry_price - (atr * 1.5)
+        
+        # ==========================================
         
         future_df = df.loc[entry_idx:].iloc[1:30]
         
