@@ -5,7 +5,7 @@ import pandas_ta as ta
 import numpy as np
 from datetime import datetime, timedelta
 import time
-import requests # BÖLÜM 1: Bunu en üste ekledik
+import requests
 
 # ==========================================
 # 🎛️ 1. STREAMLIT ARAYÜZ VE SAYFA AYARLARI
@@ -34,14 +34,33 @@ def fetch_data(ticker, start_date, end_date):
     df.dropna(inplace=True)
     return df
 
-import streamlit as st
-import yfinance as yf
-import pandas as pd
-import pandas_ta as ta
-import numpy as np
-from datetime import datetime, timedelta
-import time
-import requests # BÖLÜM 1: Bunu en üste ekledik
+@st.cache_data(ttl=86400)
+def get_market_tickers(market_type):
+    """Otomatik hisse listelerini çeker (Wikipedia Engelini Aşan Versiyon)"""
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    
+    if market_type == "S&P 500":
+        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        html = requests.get(url, headers=headers).text
+        tables = pd.read_html(html)
+        for df in tables:
+            if 'Symbol' in df.columns:
+                return df['Symbol'].str.replace('.', '-', regex=False).tolist()
+        return []
+        
+    elif market_type == "NASDAQ 100":
+        url = 'https://en.wikipedia.org/wiki/Nasdaq-100'
+        html = requests.get(url, headers=headers).text
+        tables = pd.read_html(html)
+        for df in tables:
+            if 'Ticker' in df.columns:
+                return df['Ticker'].tolist()
+        return []
+        
+    elif market_type == "Space & AI Explosive (Manuel)":
+        return ["ASTS", "RKLB", "SPIR", "SIDU", "AMPG", "LUNR", "SMCI", "NVDA", "PLTR", "SOFI", "IREN"]
+        
+    return ["QQQ", "SPY"]
 
 def apply_sahane_logic(df, qqq_df, vwm_len=14, ema_fast=5):
     # RVOL ve Squeeze
@@ -51,13 +70,12 @@ def apply_sahane_logic(df, qqq_df, vwm_len=14, ema_fast=5):
     bb = ta.bbands(df['Close'], length=20, std=2.0)
     kc = ta.kc(df['High'], df['Low'], df['Close'], length=20, scalar=1.5)
     
-    # Sütun isimleri farklı gelse bile hata vermemesi için dinamik yakalama:
+    # Sütun isimleri farklı gelse bile hata vermemesi için dinamik yakalama
     if bb is not None and kc is not None and not bb.empty and not kc.empty:
         bbl_col = [c for c in bb.columns if c.startswith('BBL')][0]
         bbu_col = [c for c in bb.columns if c.startswith('BBU')][0]
         kcl_col = [c for c in kc.columns if c.startswith('KCL')][0]
         kcu_col = [c for c in kc.columns if c.startswith('KCU')][0]
-        
         df['In_Squeeze'] = (bb[bbl_col] > kc[kcl_col]) & (bb[bbu_col] < kc[kcu_col])
     else:
         df['In_Squeeze'] = False
@@ -72,7 +90,7 @@ def apply_sahane_logic(df, qqq_df, vwm_len=14, ema_fast=5):
     return df
 
 def run_historical_backtest(df):
-    """Geçmiş Efor Kırılımlarını (Yeşil Üçgen) bulur ve hedefleri simüle eder"""
+    """Geçmiş Efor Kırılımlarını bulur ve hedefleri simüle eder"""
     signals = df[df['Effort_Cross_Up']]
     results = []
     
@@ -92,11 +110,16 @@ def run_historical_backtest(df):
         t2_hit = False
         days_to_t1 = None
         days_to_t2 = None
+        max_price_reached = entry_price # Görülen en yüksek fiyatı takip etmek için
         
         for i in range(len(future_df)):
             current_bar = future_df.iloc[i]
             
-            # Stop patladıysa aramayı bırak
+            # Görülen en yüksek seviyeyi güncelle
+            if current_bar['High'] > max_price_reached:
+                max_price_reached = current_bar['High']
+            
+            # Stop patladıysa aramayı bırak (Stop öncesi görülen max fiyatı almış olduk)
             if current_bar['Low'] <= stop_loss:
                 break
                 
@@ -119,7 +142,8 @@ def run_historical_backtest(df):
             "T1 Süre (Gün)": days_to_t1 if t1_hit else "-",
             "Target 2": round(target_2, 2),
             "T2 Vuruldu mu?": "🚀" if t2_hit else "❌",
-            "T2 Süre (Gün)": days_to_t2 if t2_hit else "-"
+            "T2 Süre (Gün)": days_to_t2 if t2_hit else "-",
+            "Max Görülen Fiyat": round(max_price_reached, 2)
         })
         
     return pd.DataFrame(results)
@@ -150,7 +174,6 @@ with tab1:
         end_date = datetime.today()
         start_date = end_date - timedelta(days=150)
         
-        # Test amaçlı SP500 gibi büyük listelerde ilk 50 hisseyi alır (Sunucu çökmesin diye)
         if len(tickers) > 100: tickers = tickers[:100] 
             
         for i, ticker in enumerate(tickers):
@@ -183,14 +206,14 @@ with tab2:
     st.subheader("Forward-Looking Matrix (Efor Çizgisi Hedef Simülasyonu)")
     st.markdown("Geçmişteki 'Efor Kırılımı' sinyallerinin Tahmin 1 ve Tahmin 2'ye kaç günde ulaştığını analiz eder.")
     
-    b_ticker = st.text_input("Backtest Yapılacak Hisse (Örn: ASTS):", value="ASTS")
+    b_ticker = st.text_input("Backtest Yapılacak Hisse (Örn: ASTS):", value="ASTS").upper()
     b_days = st.slider("Kaç Günlük Geçmişi Tara?", 100, 1000, 365, step=50)
     
     if st.button("⏱️ Backtesti Başlat"):
         with st.spinner("Geçmiş sinyaller simüle ediliyor..."):
             df_b = fetch_data(b_ticker, datetime.today() - timedelta(days=b_days), datetime.today())
             if not df_b.empty:
-                df_b = apply_sahane_logic(df_b, df_b) # QQQ referansı backtestte şart değil
+                df_b = apply_sahane_logic(df_b, df_b)
                 bt_results = run_historical_backtest(df_b)
                 
                 if not bt_results.empty:
