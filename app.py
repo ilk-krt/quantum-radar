@@ -80,7 +80,6 @@ def get_market_tickers(market_type):
     return ["QQQ", "SPY"]
 
 def apply_sahane_logic(df, vwm_len=14):
-    # 1. STANDART EFOR VE SQUEEZE
     df['Vol_Avg'] = ta.sma(df['Volume'], length=65)
     df['RVOL'] = df['Volume'] / df['Vol_Avg']
     
@@ -100,10 +99,14 @@ def apply_sahane_logic(df, vwm_len=14):
     df['Effort_Line'] = ta.wma(ta.wma(df['C_V'], length=vwm_len) / ta.wma(df['Volume'], length=vwm_len), length=3)
     df['Effort_Cross_Up'] = (df['Close'] > df['Effort_Line']) & (df['Close'].shift(1) <= df['Effort_Line'].shift(1))
     
-    # 2. TRADINGVIEW BİREBİR ATR HESABI (RMA Smoothing)
-    df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14, mamode='rma')
+    # 🎯 TRADINGVIEW BİREBİR KUSURSUZ ATR HESABI (RMA Smoothing)
+    tr1 = df['High'] - df['Low']
+    tr2 = (df['High'] - df['Close'].shift(1)).abs()
+    tr3 = (df['Low'] - df['Close'].shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    df['ATR'] = tr.ewm(alpha=1/14, adjust=False).mean()
     
-    # 3. TRADINGVIEW BİREBİR WHALE POWER HESABI (Pine Script Mantığı Vektörel)
+    # 🎯 TRADINGVIEW BİREBİR WHALE POWER HESABI (Pine Script Mantığı)
     df['c_range'] = np.maximum(df['High'] - df['Low'], 0.001)
     df['upper_wick'] = df['High'] - np.maximum(df['Open'], df['Close'])
     df['lower_wick'] = np.minimum(df['Open'], df['Close']) - df['Low']
@@ -117,13 +120,21 @@ def apply_sahane_logic(df, vwm_len=14):
     df['rvol_wbot'] = np.where(rvol_raw > 2.5, 2.5 + np.log(np.maximum(rvol_raw - 1.5, 0.001)), rvol_raw)
     df['rsi_14'] = ta.rsi(df['Close'], length=14)
     
-    # Logaritmik/Üstel Matematik
     inner_calc = ((df['rsi_14'] - 50) + (df['delta_vol'] * 40) + (df['wick_delta'] * 20)) * df['rvol_wbot'] * 1.5 / 5
-    inner_calc = np.clip(inner_calc, -50, 50) # Patlamayı önlemek için limit
+    inner_calc = np.clip(inner_calc, -50, 50)
     df['logic_pwr'] = np.log(1 + np.exp(inner_calc)) * 5
     
     w_pwr_raw = np.power(np.log10(np.maximum(1 + df['logic_pwr'], 1.001)) * 65, 0.8) * 1.8
     df['w_pwr_wbot'] = ta.wma(pd.Series(np.minimum(w_pwr_raw, 100)), length=2)
+    
+    # 🎯 DİNAMİK SCORE BOOST (Her muma özel anlık itme gücü hesabı)
+    df['dynamic_score'] = (
+        (df['w_pwr_wbot'] >= 50.0).astype(int) +
+        (df['RVOL'] >= 1.5).astype(int) +
+        (df['rsi_14'] > 50).astype(int) +
+        (df['Close'] > ta.sma(df['Close'], length=50)).astype(int)
+    )
+    df['score_boost'] = 1.0 + (df['dynamic_score'] * 0.05)
     
     return df
 
@@ -135,18 +146,18 @@ def run_historical_backtest(df, tv_calibration=1.0):
         entry_price = df.loc[entry_idx, 'Close']
         atr = df.loc[entry_idx, 'ATR']
         w_pwr = df.loc[entry_idx, 'w_pwr_wbot']
+        score_boost = df.loc[entry_idx, 'score_boost']
         
         if pd.isna(atr) or pd.isna(w_pwr): continue
             
         # ==========================================
-        # 🔮 QUANTUM PROJECTION ENGINE (TV UYARLAMASI)
+        # 🔮 QUANTUM PROJECTION ENGINE (DİNAMİK PROJEKSİYON)
         # ==========================================
         base_expansion = atr * 1.5
         pwr_factor = max(1.0, min((w_pwr / 50.0), 2.0))
         
-        # TV'deki Elliot ve MTF skorlarının ortalama birleşimi olarak kalibrasyon kullanıyoruz
-        target_dist = base_expansion * pwr_factor * tv_calibration
-        target_dist = min(target_dist, atr * 4.0) # Maksimum tavan sınırı
+        target_dist = base_expansion * pwr_factor * score_boost * tv_calibration
+        target_dist = min(target_dist, atr * 4.0)
         
         target_1 = entry_price + target_dist
         target_2 = entry_price + (target_dist * 1.618)
@@ -201,8 +212,20 @@ with tab1:
             "Taranacak Pazar / Endeks / Tema", 
             ["🔥 Ana Sektör ETF'leri", "🌪️ Tematik Alt Sektör ETF'leri", "🚀 Space & AI Explosive (Manuel)", "🌐 NASDAQ 100", "🇺🇸 S&P 500"]
         )
+        
     with col2:
-        rvol_filter = st.slider("Min RVOL (Hacim Şoku Kat Sayısı)", 1.5, 10.0, 3.0, step=0.5)
+        # Pazar ağırlığına göre Akıllı Dinamik RVOL Eşik Kalibrasyonu
+        if "ETF" in market_choice:
+            st.info("💡 **Makro Pazar:** ETF'lerde hacim şokları yapısal olarak daha zordur. Önerilen min RVOL: 1.2x - 1.8x")
+            default_rvol = 1.5
+        elif "S&P" in market_choice or "NASDAQ" in market_choice:
+            st.info("💡 **Ağır Siklet:** Büyük endeks hisselerinde kurumsal para girişi aranır. Önerilen min RVOL: 2.0x - 2.5x")
+            default_rvol = 2.0
+        else:
+            st.info("💡 **Hafif Siklet:** Patlayıcı (low float) mikro/küçük hisselerde çok sert kırılımlar aranır. Önerilen min RVOL: 3.0x ve üzeri")
+            default_rvol = 3.0
+            
+        rvol_filter = st.slider("Hedeflenen Minimum RVOL (Hacim Şoku)", 1.0, 10.0, default_rvol, step=0.1)
         
     if st.button("🚀 Otopilot Taramayı Başlat", use_container_width=True):
         tickers = get_market_tickers(market_choice)
@@ -237,7 +260,7 @@ with tab1:
                 
         my_bar.empty()
         if explosive_list:
-            st.success("Tarama Tamamlandı! İşte Patlamaya Hazır Anomaliler:")
+            st.success("Tarama Tamamlandı! İşte Patlamaya Hazır Sektörler/Hisseler:")
             st.dataframe(pd.DataFrame(explosive_list), use_container_width=True)
         else:
             st.warning("Bu kriterlere uyan hacim şoku yaşanmadı.")
@@ -253,8 +276,7 @@ with tab2:
     with col_b2:
         b_days = st.slider("Kaç Günlük Geçmişi Tara?", 100, 1000, 365, step=50)
     with col_b3:
-        # MTF ve Score Boost farkını kapatmak için kalibrasyon ayarı
-        tv_calib = st.number_input("TV Kalibrasyon Çarpanı", min_value=0.5, max_value=3.0, value=1.15, step=0.05, help="TradingView'daki hedeflerle Python hedefleri arasında ufak farklar varsa, burayı kaydırarak eşitleyebilirsin.")
+        tv_calib = st.number_input("TV Kalibrasyon Çarpanı", min_value=0.5, max_value=3.0, value=1.15, step=0.05, help="TradingView'daki hedeflerle Python hedefleri arasında binde birlik MTF sapmaları kalırsa burayı kaydırarak kusursuz eşitleyebilirsin.")
     
     if st.button("⏱️ Backtesti Başlat"):
         with st.spinner("Geçmiş sinyaller simüle ediliyor..."):
