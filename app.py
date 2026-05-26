@@ -53,8 +53,15 @@ def apply_sahane_logic(df, qqq_df, vwm_len=14, ema_fast=5):
     
     bb = ta.bbands(df['Close'], length=20, std=2.0)
     kc = ta.kc(df['High'], df['Low'], df['Close'], length=20, scalar=1.5)
-    if bb is not None and kc is not None:
-        df['In_Squeeze'] = (bb[f'BBL_20_2.0'] > kc[f'KCLe_20_1.5']) & (bb[f'BBU_20_2.0'] < kc[f'KCUe_20_1.5'])
+    
+    # Sütun isimleri farklı gelse bile hata vermemesi için dinamik yakalama:
+    if bb is not None and kc is not None and not bb.empty and not kc.empty:
+        bbl_col = [c for c in bb.columns if c.startswith('BBL')][0]
+        bbu_col = [c for c in bb.columns if c.startswith('BBU')][0]
+        kcl_col = [c for c in kc.columns if c.startswith('KCL')][0]
+        kcu_col = [c for c in kc.columns if c.startswith('KCU')][0]
+        
+        df['In_Squeeze'] = (bb[bbl_col] > kc[kcl_col]) & (bb[bbu_col] < kc[kcu_col])
     else:
         df['In_Squeeze'] = False
 
