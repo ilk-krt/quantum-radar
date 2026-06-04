@@ -67,7 +67,6 @@ GLOBAL_MAP = {
 }
 
 ETF_INFO = {
-    # Klasik Tematikler
     "XLU": {"area": "Utilities & Şebeke", "stocks": ["NEE", "SO", "DUK", "CEG", "AEP", "SRE", "D", "ETR", "VST", "XEL"]},
     "PAVE": {"area": "Altyapı Yenileme", "stocks": ["ETN", "PH", "HUBB", "POWL", "TT", "CARR", "JCI", "URI", "FAST", "GWW", "VMC", "MLM", "EXP", "J", "ACM", "PWR", "EME"]},
     "XLK": {"area": "Teknoloji Devleri", "stocks": ["NVDA", "AAPL", "MSFT", "MU", "AVGO", "AMD", "INTC", "CSCO", "PLTR", "AMAT"]},
@@ -75,15 +74,11 @@ ETF_INFO = {
     "SMH": {"area": "Global Çip Dökümhaneleri", "stocks": ["TSM", "INTC", "ASML", "NVDA", "AMD", "AVGO", "MRVL", "QCOM", "AMAT", "LRCX", "KLAC"]},
     "URA": {"area": "Uranyum ve Nükleer", "stocks": ["CCJ", "KAP", "NXE", "UEC", "UUUU", "DNN", "BWXT", "LEU", "SMR", "CEG"]},
     "WGMI": {"area": "Bitcoin Madenciliği", "stocks": ["MARA", "RIOT", "CLSK", "HUT", "CIFR", "IREN", "WULF", "CORZ", "HIVE", "BTDR", "NVDA", "AMD"]},
-    
-    # Yeni Geliştirilmiş Tematik Dosyalar (Derin Sektörler)
     "PHOTON": {"area": "Fotonik ve Optik Ekosistemi", "stocks": ["IQE", "AXTI", "AAOI", "AEHR", "LWLG", "WOLF", "OPTX", "VIAV", "HIMX", "LITE", "STM", "CIEN", "TSEM", "GFS", "UMC", "MRVL", "FORM", "MTSI", "POET", "ASX", "SMTC", "LASR", "VECO", "COHR", "PLTR", "TER", "LRCX", "ONTO", "AMAT", "AMKR", "SANM", "FN", "CRDO", "TECK"]},
     "QUANT": {"area": "Kuantum Bilişim & Algoritma", "stocks": ["ARQQ", "QBTS", "RGTI", "QUBT", "IONQ", "GFS", "IBM", "COHR", "HON", "TSEM", "MRVL", "GOOGL", "FORM", "RTX", "MSFT", "RDNT", "NVDA", "INTC", "BIDU", "BABA"]},
     "CYBER": {"area": "Global Siber Güvenlik", "stocks": ["ZS", "TENB", "OKTA", "FFIV", "CRWD", "S", "RPD", "BAH", "FTNT", "CHKP", "PANW", "NET", "VRNS", "LDOS", "CSCO", "SCWX"]},
     "SPACE_RACE": {"area": "SpaceX & Uzay İnovasyonu", "stocks": ["TSLA", "RKLB", "ASTS", "FLY", "SATS", "PL", "AMZN", "TMUS", "QCOM", "SATL", "SPIR", "IRDM", "GLW", "LUNR", "BKSY", "VSAT", "MDA", "RDW", "DCO", "ATRO", "VOYG", "ARKX", "HON", "LMT", "LHX", "BA", "NOC", "RTX", "HEI", "TDG", "SPCE", "YSS", "SIDU"]},
     "MEMORY_AI": {"area": "Yapay Zeka Hafıza & Veri Gölleri", "stocks": ["MU", "ALAB", "MRVL", "DELL", "NTAP", "PSTG", "HPE", "IBM", "STX", "WDC"]},
-    
-    # Özel Akış / Tarama Listeleri
     "TRUMP_PF": {"area": "Trump Portföyü (İzleme Listesi)", "stocks": ["DELL", "TXN", "DVA", "JBL", "KLAC", "MARA", "ETN", "AVGO", "NVDA", "TT", "MSTR", "COST", "CDNS", "AAPL", "SNPS", "MSI", "PNC", "ORCL", "ICE", "NFLX", "COIN", "UBER", "HD", "MSFT", "CVNA", "NVR", "ADBE", "CRM", "NOW", "WDAY"]},
     "RECENT_IPO": {"area": "Son Dönem Halka Arzlar", "stocks": ["CDNL", "AMBQ", "Q", "SOLS", "CRCL", "FPS", "PTRN", "BLLN", "PAYP", "BLSH", "VOYG", "NAVN", "XE", "AVEX", "ETOR", "GLOO", "FIGR", "YSS", "SOLV", "ARXS", "ELMT", "OMDA"]},
     "EARNINGS": {"area": "Yaklaşan Bilançolar Haftası", "stocks": ["CEG", "CRCL", "RDNT", "MNDY", "ASTS", "HIMS", "PLUG", "RGTI", "SE", "CAMT", "QBTS", "SATL", "JD", "OKLO", "PAGS", "BABA", "NBIS", "TSEM", "SONY", "DT", "BIRK", "POET", "CSCO", "BOOT", "DOCS", "ONDS", "AMAT", "NU", "QUBT", "TTWO"]}
@@ -165,21 +160,6 @@ def draw_battery(label, current, color, delta_1d=0.0, delta_1w=0.0):
         </div>
     ''', unsafe_allow_html=True)
 
-def draw_etf_battery(label, current, prev_1d, prev_1w, color, delta_icon, info=""):
-    chg_1d = current - prev_1d
-    c1_sign = f"+{chg_1d:.1f}" if chg_1d >= 0 else f"{chg_1d:.1f}"
-    c1_col = "#00ff88" if chg_1d >= 0 else "#ff3333"
-    
-    st.markdown(f'''
-        <div style="margin-bottom: 2px; font-size: 0.85rem; color: #e0e0e0;">
-            <strong>{label}</strong> {info}
-            <span style="font-size:0.75rem; float:right; color:{c1_col}; font-weight:bold;">(Δ 1D: %{c1_sign}) {delta_icon}</span>
-        </div>
-        <div class="battery-container" style="height: 22px; margin-bottom: 12px; border-radius: 6px;">
-            <div class="battery-fill" style="width: {min(max(current, 0), 100)}%; background-color: {color}; font-size: 0.8rem;">%{int(current)}</div>
-        </div>
-    ''', unsafe_allow_html=True)
-
 def draw_smart_money_flow(trigger_data):
     dot = graphviz.Digraph()
     dot.attr(bgcolor='#050505', rankdir='LR', ranksep='1.5', nodesep='0.8')
@@ -208,7 +188,7 @@ def draw_smart_money_flow(trigger_data):
     st.graphviz_chart(dot, use_container_width=True)
 
 # ==========================================
-# 3. YFINANCE PANDAS MATEMATİK & OMNI FUSION
+# 3. YFINANCE PANDAS MATEMATİK (SAF & GÜVENLİ)
 # ==========================================
 def ta_sma(series, length):
     return series.rolling(window=length, min_periods=1).mean()
@@ -242,7 +222,7 @@ def ta_cci(high, low, close, length=20):
     typ = (high + low + close) / 3
     sma = typ.rolling(window=length).mean()
     mad = typ.rolling(window=length).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
-    return (typ - sma) / (0.015 * mad)
+    return (typ - sma) / (0.015 * mad.replace(0, 0.001))
 
 @st.cache_data
 def fetch_matrix_data(bypass_stamp):
@@ -251,10 +231,22 @@ def fetch_matrix_data(bypass_stamp):
     end_date = datetime.now()
     raw_data = yf.download(all_etfs, start=end_date - timedelta(days=90), end=end_date, interval="1d", group_by='ticker', progress=False)
     matrix_results = []
+    
+    # Çoklu hisse senedi veri formatını düzeltme (Güvenli Yöntem)
+    if isinstance(raw_data.columns, pd.MultiIndex):
+        raw_data.columns = raw_data.columns.swaplevel(0, 1)
+
     for t in all_etfs:
         try:
-            df = raw_data[t].dropna() if len(all_etfs) > 1 else raw_data.dropna()
+            # Doğru veriyi çek (Hata toleranslı)
+            if isinstance(raw_data.columns, pd.MultiIndex):
+                df = raw_data[t].copy()
+            else:
+                df = raw_data.copy()
+                
+            df.dropna(subset=['Close'], inplace=True)
             if len(df) < 25: continue
+            
             close = df['Close']
             
             rsi_series = ta_rsi(close, 14)
@@ -277,7 +269,9 @@ def fetch_matrix_data(bypass_stamp):
                 "Sektör": cat, "ETF": t, "RSI": r14_current, "RSI_1D": r14_1d_ago, "RSI_1W": r14_1w_ago, 
                 "BBW": current_bbw, "Durum": state, "Renk": color, "Delta_Icon": delta_icon
             })
-        except: continue
+        except Exception as e:
+            continue
+            
     return pd.DataFrame(matrix_results)
 
 def apply_sahane_logic_v700(df):
@@ -304,7 +298,7 @@ def apply_sahane_logic_v700(df):
     tsi_norm = np.clip(tsi_val + 50, 0, 100)
     
     raw_omni = (rsi_fast + rsi_mid + mfi_val + cci_norm + tsi_norm) / 5
-    mom_consensus = ta_wma(raw_omni, 3)
+    mom_consensus = ta_wma(raw_omni, 3).fillna(50)
 
     # --- 2. Whale Power (w_pwr) ---
     c_range = np.maximum(high - low, 0.001)
@@ -318,16 +312,16 @@ def apply_sahane_logic_v700(df):
     v_avg = ta_sma(vol, vol_sma_len)
     
     rvol_raw = vol / np.maximum(v_avg, 1)
-    rvol = np.where(rvol_raw > 2.5, 2.5 + np.log(np.maximum(rvol_raw - 1.5, 0.001)), rvol_raw)
+    rvol = pd.Series(np.where(rvol_raw > 2.5, 2.5 + np.log(np.maximum(rvol_raw - 1.5, 0.001)), rvol_raw)).fillna(1)
     
     fvg_bull = (low > high.shift(2)) & (close > open_p)
-    logic_pwr_base = ((ta_rsi(close, 14) - 50) + (delta_vol * 40) + (wick_delta * 20)) * rvol * 1.5 / 5
+    logic_pwr_base = ((ta_rsi(close, 14) - 50) + (delta_vol * 40) + (pd.Series(wick_delta) * 20)) * rvol * 1.5 / 5
     logic_pwr = np.log(1 + np.exp(np.clip(logic_pwr_base, -50, 50))) * 5
     logic_pwr = np.where(fvg_bull, logic_pwr + 35, logic_pwr)
     
-    w_pwr_raw = np.power(np.log10(np.maximum(1 + logic_pwr, 1.001)) * 65, 0.8) * 1.8
-    w_pwr = ta_wma(pd.Series(np.minimum(w_pwr_raw, 100), index=df.index), 2)
-    pct_pro = ta_ema(w_pwr, 3)
+    w_pwr_raw = pd.Series(np.power(np.log10(np.maximum(1 + logic_pwr, 1.001)) * 65, 0.8) * 1.8, index=df.index).fillna(0)
+    w_pwr = ta_wma(pd.Series(np.minimum(w_pwr_raw, 100), index=df.index), 2).fillna(0)
+    pct_pro = ta_ema(w_pwr, 3).fillna(0)
 
     # Whale States
     wh_yellow_last_3 = (pct_pro.shift(1) > w_pwr.shift(1)) & (pct_pro.shift(2) > w_pwr.shift(2)) & (pct_pro.shift(3) > w_pwr.shift(3))
@@ -340,7 +334,7 @@ def apply_sahane_logic_v700(df):
     
     # --- 3. Omni RS Dynamic Effort ---
     raw_effort = ta_wma(close * vol, 14) / ta_wma(vol, 14).replace(0, 0.001)
-    smoothed_effort = ta_wma(raw_effort, 3)
+    smoothed_effort = ta_wma(raw_effort, 3).fillna(close)
 
     rs_f_macd = ta_ema(close, 12) - ta_ema(close, 26)
     rs_f_speed = ((rs_f_macd - rs_f_macd.rolling(100).min()) / np.maximum(rs_f_macd.rolling(100).max() - rs_f_macd.rolling(100).min(), 0.001) * 100) - 50
@@ -349,7 +343,7 @@ def apply_sahane_logic_v700(df):
     rs_s_macd = ta_ema(hlc3, 12) - ta_ema(hlc3, 26)
     rs_s_speed = ((rs_s_macd - rs_s_macd.rolling(100).min()) / np.maximum(rs_s_macd.rolling(100).max() - rs_s_macd.rolling(100).min(), 0.001) * 100) - 50
     
-    rs_cross = (rs_f_speed > rs_f_sig) & (rs_f_speed.shift(1) <= rs_f_sig.shift(1)) | (rs_f_speed < rs_f_sig) & (rs_f_speed.shift(1) >= rs_f_sig.shift(1))
+    rs_cross = ((rs_f_speed > rs_f_sig) & (rs_f_speed.shift(1) <= rs_f_sig.shift(1))) | ((rs_f_speed < rs_f_sig) & (rs_f_speed.shift(1) >= rs_f_sig.shift(1)))
     
     rs_color_code = pd.Series(0, index=df.index)
     rs_color_code = np.where(rs_cross, 0,
@@ -414,12 +408,22 @@ def calculate_signals(ticker_list, interval="1d", bypass_stamp=""):
             raw_data = yf.download(ticker_list, start=end_date - timedelta(days=60), end=end_date, interval="1h", group_by='ticker', progress=False)
         elif interval == "1wk":
             raw_data = yf.download(ticker_list, start=end_date - timedelta(days=365), end=end_date, interval="1wk", group_by='ticker', progress=False)
-    except: return pd.DataFrame()
+    except Exception as e: 
+        return pd.DataFrame()
+
+    # Çoklu hisse senedi veri formatını düzeltme
+    if isinstance(raw_data.columns, pd.MultiIndex):
+        raw_data.columns = raw_data.columns.swaplevel(0, 1)
 
     results = []
     for t in ticker_list:
         try:
-            df = raw_data[t].copy().dropna() if len(ticker_list) > 1 else raw_data.copy().dropna()
+            if isinstance(raw_data.columns, pd.MultiIndex):
+                df = raw_data[t].copy()
+            else:
+                df = raw_data.copy()
+                
+            df.dropna(subset=['Close'], inplace=True)
             if len(df) < 50: continue
 
             if interval == "4h":
@@ -717,9 +721,18 @@ with tab7:
         
     if st.button("⚛️ V700 Fusion Reversal Analizi Yap", use_container_width=True):
         with st.spinner("Algoritmalar geçmişi simüle ediyor..."):
-            df_b = yf.download(b_ticker, start=datetime.today() - timedelta(days=b_days), end=datetime.today(), progress=False)
-            if not df_b.empty:
-                df_b.columns = [c[0] for c in df_b.columns] if isinstance(df_b.columns, pd.MultiIndex) else df_b.columns
+            
+            raw_b = yf.download(b_ticker, start=datetime.today() - timedelta(days=b_days), end=datetime.today(), progress=False)
+            
+            if not raw_b.empty:
+                # Güvenli MultiIndex çözümü
+                if isinstance(raw_b.columns, pd.MultiIndex):
+                    df_b = raw_b[b_ticker].copy()
+                else:
+                    df_b = raw_b.copy()
+
+                df_b.dropna(subset=['Close'], inplace=True)
+                
                 df_b = apply_sahane_logic_v700(df_b)
                 
                 # Sadece Mavi ve Kırmızı Diamond'ların basıldığı günleri listele
