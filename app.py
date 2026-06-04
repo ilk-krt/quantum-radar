@@ -165,7 +165,6 @@ def draw_smart_money_flow(trigger_data):
 # ==========================================
 # 3. VERİ ÇEKİMİ VE YFINANCE MULTI-INDEX FİLTRESİ
 # ==========================================
-# Bu fonksiyon yfinance'ın en büyük problemi olan MultiIndex hatasını çözer.
 def get_safe_df(raw_data, ticker):
     if isinstance(raw_data.columns, pd.MultiIndex):
         if ticker in raw_data.columns.levels[0]:
@@ -289,8 +288,11 @@ def calculate_signals(ticker_list, interval="1d", bypass_stamp=""):
     if not ticker_list: return pd.DataFrame()
     end_date = datetime.now()
     
+    # KRİTİK DÜZELTME: Haftalık analiz için 30 mum şartı var. 150 gün yetmez, 400 güne çıkardık.
+    days_back = 150 if interval != "1wk" else 400
+    
     try:
-        raw_data = yf.download(ticker_list, start=end_date - timedelta(days=150), end=end_date, interval=interval, group_by='ticker', progress=False)
+        raw_data = yf.download(ticker_list, start=end_date - timedelta(days=days_back), end=end_date, interval=interval, group_by='ticker', progress=False)
     except: 
         return pd.DataFrame()
 
@@ -332,7 +334,8 @@ def calculate_signals(ticker_list, interval="1d", bypass_stamp=""):
     if results: return pd.DataFrame(results).sort_values(by="Fusion", ascending=False)
     return pd.DataFrame()
 
-@st.cache_data
+# KRİTİK DÜZELTME: API Limitlerine Karşı fast_info yedekleme mekanizması
+@st.cache_data(ttl=1800)
 def fetch_fundamental_data(ticker_list):
     funds = []
     for t in ticker_list:
@@ -340,8 +343,11 @@ def fetch_fundamental_data(ticker_list):
             tk = yf.Ticker(t)
             info = tk.info
             
+            # fast_info genelde banlanmaz, onu yedeğe aldık.
             mc = info.get('marketCap', 0)
-            if mc is None: mc = 0
+            if mc is None or mc == 0:
+                try: mc = tk.fast_info['marketCap']
+                except: mc = 0
                 
             pe = info.get('trailingPE', 0)
             if pe is None: pe = 0
@@ -494,15 +500,19 @@ with tab4:
             val_data = fetch_fundamental_data(tickers)
             
             if not val_data.empty:
-                val_data = val_data[val_data['MarketCap'] > 0]
-                val_data = val_data.sort_values(by='MarketCap', ascending=False)
+                # KRİTİK DÜZELTME: API'den verisi gelemeyenleri de yakalayıp uyaralım
+                valid_data = val_data[val_data['MarketCap'] > 0]
                 
-                if len(val_data) > 1:
-                    leader = val_data.iloc[0]
+                if valid_data.empty:
+                    st.error("⚠️ Yahoo Finance API geçici olarak Market Cap (Piyasa Değeri) verilerini reddetti. Lütfen birkaç dakika sonra tekrar deneyin.")
+                else:
+                    valid_data = valid_data.sort_values(by='MarketCap', ascending=False)
+                    leader = valid_data.iloc[0]
                     st.markdown(f"<div class='valuation-leader'>🏆 Grup Lideri: {leader['Ticker']} (Market Cap: ${leader['MarketCap']/1e9:.1f}B, F/K: {leader['PE']:.1f})</div>", unsafe_allow_html=True)
                     st.write("---")
-                    for i in range(1, len(val_data)):
-                        row = val_data.iloc[i]
+                    
+                    for i in range(1, len(valid_data)):
+                        row = valid_data.iloc[i]
                         gap_mc = leader['MarketCap'] / row['MarketCap'] if row['MarketCap'] > 0 else 0
                         pe_str = f"F/K: {row['PE']:.1f}" if row['PE'] > 0 else f"P/S: {row['PS']:.1f}"
                         st.markdown(f'''
@@ -547,7 +557,7 @@ with tab7:
         with st.spinner("Algoritmalar geçmişi simüle ediyor..."):
             raw_b = yf.download(b_ticker, start=datetime.today() - timedelta(days=b_days), end=datetime.today(), progress=False)
             
-            # GÜVENLİ MULTI-INDEX ÇEKİMİ (KeyError Çözümü)
+            # GÜVENLİ MULTI-INDEX ÇEKİMİ
             df_b = get_safe_df(raw_b, b_ticker)
             
             if not df_b.empty:
