@@ -1,8 +1,10 @@
 streamlit
 yfinance
-pandas<3.0.0
-pandas_ta
+pandas
 numpy
 plotly
+graphviz
+pandas<3.0.0
+pandas_ta
 lxml
 requests
